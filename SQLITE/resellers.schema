@@ -1,0 +1,4 @@
+0|domain|TEXT|1||0
+1|groups|TEXT|1||0
+2|counter|INTEGER|1|0|0
+3|dated|INTEGER|1|STRFTIME('%s', 'NOW')|0
