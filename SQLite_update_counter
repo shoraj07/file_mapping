@@ -1,0 +1,84 @@
+import sqlite3
+import re
+import os
+
+# File paths (use raw strings to avoid escape sequence issues)
+log_file_path = r'C:\Users\Lenovo\GITHub\cocom\resource\processed_files_log.txt'
+db_file_path = r'C:\Users\Lenovo\GITHub\cocom\resource\marker.db'
+
+def parse_filename(filename):
+    # Example filename: 3star170_BE_5_EW0_240723151500.txt
+    match = re.match(r'^(.*?)_(.*?)_(\d{12})\.txt$', filename)
+    if match:
+        domain = match.group(1)
+        group = match.group(2)
+        dated = match.group(3)
+        return domain, group, dated
+    return None, None, None
+
+def update_database(log_file_path, db_file_path):
+    # Check if the database file exists
+    if not os.path.exists(db_file_path):
+        print(f"Database file does not exist: {db_file_path}")
+        return
+    
+    # Connect to the SQLite database
+    try:
+        conn = sqlite3.connect(db_file_path)
+        cursor = conn.cursor()
+    except sqlite3.OperationalError as e:
+        print(f"Error opening database file: {e}")
+        return
+    
+    # Read the log file and update the database
+    try:
+        with open(log_file_path, 'r') as log_file:
+            for line in log_file:
+                line = line.strip()
+                if line:
+                    filename = line
+                    domain, group, dated = parse_filename(filename)
+                    
+                    if domain and group and dated:
+                        # Check if the record exists
+                        cursor.execute('''
+                            SELECT counter, dated
+                            FROM resellers
+                            WHERE domain = ? AND "groups" = ?
+                        ''', (domain, group))
+                        
+                        result = cursor.fetchone()
+                        
+                        if result:
+                            # Record exists, update the counter and dated
+                            counter, old_dated = result
+                            new_counter = counter + 1
+                            cursor.execute('''
+                                UPDATE resellers
+                                SET counter = ?, dated = ?
+                                WHERE domain = ? AND "groups" = ?
+                            ''', (new_counter, dated, domain, group))
+                            # print(f"Updated: domain={domain}, group={group}, old_counter={counter}, new_counter={new_counter}, old_dated={old_dated}, new_dated={dated}")
+                        else:
+                            # Record does not exist, insert a new entry
+                            cursor.execute('''
+                                INSERT INTO resellers (domain, "groups", dated, counter)
+                                VALUES (?, ?, ?, ?)
+                            ''', (domain, group, dated, 1))
+                            # print(f"Inserted: domain={domain}, group={group}, dated={dated}, counter=1")
+        
+        # Commit the changes and close the connection
+        conn.commit()
+        conn.close()
+    
+    except FileNotFoundError as e:
+        print(f"Log file not found: {e}")
+
+    except sqlite3.OperationalError as e:
+        print(f"SQLite operational error: {e}")
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+# Update the database
+update_database(log_file_path, db_file_path)
